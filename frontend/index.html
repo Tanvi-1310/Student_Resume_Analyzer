@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Resume Analyzer — Project Dashboard</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="project-header">
+      <div class="header-content">
+        <h1>Student Resume Analyzer</h1>
+        <p class="tagline">An explainable AI &amp; NLP system for student resume structure evaluation and skill alignment.</p>
+      </div>
+      <div class="system-status">
+        <span class="status-indicator" id="status-indicator"></span>
+        <span class="status-text" id="status-text">Checking backend...</span>
+      </div>
+    </header>
+
+    <!-- Project Scope & Notice Banner -->
+    <div class="banner info-banner">
+      <div class="banner-badge">System Operational</div>
+      <div class="banner-message">
+        <strong>Explainable Resume Evaluation Pipeline:</strong> Ingest resumes (PDF or DOCX), parse structured entities, evaluate four transparent rubric dimensions (Structure, Contacts, Quantified Impact, Skill Coverage), and inspect job alignment. Processed purely in volatile memory.
+      </div>
+    </div>
+
+    <!-- Error Alert Banner -->
+    <div class="banner error-banner hidden" id="error-banner" role="alert" aria-live="assertive">
+      <span class="error-badge">Error</span>
+      <span class="error-message" id="error-message"></span>
+    </div>
+
+    <!-- Main Content Grid -->
+    <main class="main-layout">
+      <!-- Input Column -->
+      <section class="card input-section" aria-labelledby="input-heading">
+        <h2 id="input-heading">Resume &amp; Job Description Input</h2>
+
+        <!-- Step 1: Resume Upload -->
+        <div class="form-group">
+          <div class="step-header">
+            <span class="step-number">1</span>
+            <label for="resume-file" class="step-label">Upload Resume (PDF or DOCX format)</label>
+            <span class="phase-tag active-tag">Operational</span>
+          </div>
+          <div class="upload-dropzone" id="dropzone">
+            <input type="file" id="resume-file" accept=".pdf,.docx" aria-describedby="upload-help">
+            <p class="dropzone-text" id="dropzone-filename">Click or drag &amp; drop a PDF or Word (.docx) resume here</p>
+            <p class="dropzone-subtext" id="upload-help">Max size: 5 MB &bull; Up to 10 pages &bull; Text-based PDF or Word (.docx) &bull; Legacy .doc not supported</p>
+          </div>
+
+          <div class="button-group">
+            <button type="button" class="btn btn-primary" id="extract-btn" disabled>
+              1. Extract Text
+            </button>
+            <button type="button" class="btn btn-accent" id="analyze-structure-btn" disabled>
+              2. Parse Sections &amp; Skills
+            </button>
+            <button type="button" class="btn btn-feedback" id="feedback-btn" disabled>
+              3. Generate Feedback Rubric
+            </button>
+            <button type="button" class="btn btn-secondary hidden" id="clear-btn">
+              Clear All
+            </button>
+          </div>
+
+          <!-- Loading Indicator -->
+          <div class="loading-state hidden" id="loading-state" aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span>
+            <span id="loading-text">Processing in memory...</span>
+          </div>
+        </div>
+
+        <!-- Step 2: Target Job Description -->
+        <div class="form-group">
+          <div class="step-header">
+            <span class="step-number">2</span>
+            <label for="job-description" class="step-label">Target Job Description</label>
+            <span class="phase-tag active-tag">Operational</span>
+          </div>
+          <textarea
+            id="job-description"
+            rows="6"
+            placeholder="Paste target job description, internship requirements, or technical posting here to compare against resume..."
+            aria-label="Target Job Description"
+          ></textarea>
+
+          <button type="button" class="btn btn-match" id="match-btn" disabled>
+            3. Compare with Job Description
+          </button>
+        </div>
+      </section>
+
+      <!-- Output Column: Results Area -->
+      <section class="card results-section" aria-labelledby="results-heading">
+        <h2 id="results-heading">Analysis &amp; Matching Results</h2>
+
+        <!-- Initial Placeholder (shown when no document is extracted) -->
+        <div class="results-placeholder" id="results-placeholder">
+          <div class="placeholder-icon" aria-hidden="true">&cir;</div>
+          <h3>No Resume Ingested Yet</h3>
+          <p>
+            Upload a PDF or Word (.docx) resume and click <strong>Extract Text</strong> to view document metrics, parse structured entities, and compare against a job description.
+          </p>
+          
+          <div class="roadmap-box">
+            <h4>System Capabilities:</h4>
+            <ul class="roadmap-list">
+              <li><strong>Document Ingestion:</strong> In-memory PDF and Word (.docx) extraction, character counts, page bounds, and scanned detection.</li>
+              <li><strong>Structure &amp; Entities:</strong> Section boundary detection, contact coordinates, and canonical technical skills.</li>
+              <li><strong>Job Alignment:</strong> Dual-signal baseline: TF-IDF cosine similarity &amp; explicit skill overlap ratio.</li>
+              <li><strong>Formative Feedback:</strong> Explainable 4-dimension heuristic rubric (Structure, Contacts, Quantified Impact, Skill Coverage).</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Results Content View (shown after extraction) -->
+        <div class="results-content hidden" id="results-content">
+          <!-- Metrics Overview Grid -->
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <span class="metric-label">Pages</span>
+              <span class="metric-value" id="metric-pages">0</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Words</span>
+              <span class="metric-value" id="metric-words">0</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Characters</span>
+              <span class="metric-value" id="metric-chars">0</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Engine</span>
+              <span class="metric-value-sm" id="metric-engine">-</span>
+            </div>
+          </div>
+
+          <!-- Document Filename & Parser Status -->
+          <div class="status-box" id="status-box">
+            <div class="doc-meta">
+              <span class="doc-name" id="doc-name"></span>
+              <span class="status-pill" id="status-pill">Parsed</span>
+            </div>
+          </div>
+
+          <!-- Heuristic Feedback Box (Populated after Step 3) -->
+          <div class="feedback-box hidden" id="feedback-box">
+            <div class="feedback-header">
+              <div class="feedback-header-title">
+                <h3>Resume Feedback Index (heuristic)</h3>
+                <span class="heuristic-tag">Pedagogical Rubric</span>
+              </div>
+              <div class="feedback-score-container">
+                <span class="feedback-score-num" id="feedback-total-score">0.0</span>
+                <span class="feedback-score-denom">/ 100</span>
+                <span class="feedback-tier-badge" id="feedback-tier-badge">Developing</span>
+              </div>
+            </div>
+
+            <!-- Ethical Disclaimer Banner -->
+            <div class="feedback-disclaimer">
+              <strong>Pedagogical Improvement Aid:</strong> This rubric is an explainable resume-improvement aid. It is <em>not</em> an automated ATS score, hiring probability, employability score, or prediction of interview outcomes.
+            </div>
+
+            <!-- Prioritized Actionable Recommendations -->
+            <div class="analysis-subcard">
+              <h4>Prioritized Actionable Recommendations</h4>
+              <ul class="recommendations-list" id="feedback-recommendations-list"></ul>
+            </div>
+
+            <!-- 4 Separate Dimensions Grid -->
+            <div class="dimensions-grid">
+              <!-- Dimension 1: Structure -->
+              <div class="dimension-card" id="dim-structure-card">
+                <div class="dim-card-header">
+                  <span class="dim-title">1. Resume Structure</span>
+                  <span class="dim-score" id="dim-structure-score">0 / 25 pts</span>
+                </div>
+                <div class="dim-status-pill" id="dim-structure-status">--</div>
+                <p class="dim-summary" id="dim-structure-summary"></p>
+                <div class="dim-evidence" id="dim-structure-evidence"></div>
+              </div>
+
+              <!-- Dimension 2: Contacts -->
+              <div class="dimension-card" id="dim-contact-card">
+                <div class="dim-card-header">
+                  <span class="dim-title">2. Contact Completeness</span>
+                  <span class="dim-score" id="dim-contact-score">0 / 25 pts</span>
+                </div>
+                <div class="dim-status-pill" id="dim-contact-status">--</div>
+                <p class="dim-summary" id="dim-contact-summary"></p>
+                <div class="dim-evidence" id="dim-contact-evidence"></div>
+              </div>
+
+              <!-- Dimension 3: Quantified Impact -->
+              <div class="dimension-card" id="dim-impact-card">
+                <div class="dim-card-header">
+                  <span class="dim-title">3. Quantified Impact</span>
+                  <span class="dim-score" id="dim-impact-score">0 / 25 pts</span>
+                </div>
+                <div class="dim-status-pill" id="dim-impact-status">--</div>
+                <p class="dim-summary" id="dim-impact-summary"></p>
+                <div class="dim-evidence" id="dim-impact-evidence"></div>
+              </div>
+
+              <!-- Dimension 4: Skill Taxonomy -->
+              <div class="dimension-card" id="dim-skills-card">
+                <div class="dim-card-header">
+                  <span class="dim-title">4. Skill-Taxonomy Coverage</span>
+                  <span class="dim-score" id="dim-skills-score">0 / 25 pts</span>
+                </div>
+                <div class="dim-status-pill" id="dim-skills-status">--</div>
+                <p class="dim-summary" id="dim-skills-summary"></p>
+                <div class="dim-evidence" id="dim-skills-evidence"></div>
+              </div>
+            </div>
+
+            <!-- Recognized Metrics Snippets (if any) -->
+            <div class="analysis-subcard hidden" id="recognized-metrics-subcard">
+              <h4>Recognized Quantified Metrics (<span id="recognized-metrics-count">0</span>)</h4>
+              <div class="metrics-snippets-list" id="metrics-snippets-list"></div>
+            </div>
+
+            <!-- Detected Canonical Technical Skills Subcard -->
+            <div class="analysis-subcard hidden" id="feedback-detected-skills-subcard">
+              <h4>Detected Technical Skills in Resume (<span id="feedback-detected-skills-count">0</span>)</h4>
+              <div class="skill-chips" id="feedback-detected-skills-chips"></div>
+            </div>
+          </div>
+
+          <!-- Matching Signals Box (Populated after Step 4) -->
+          <div class="matching-box hidden" id="matching-box">
+            <div class="matching-header">
+              <h3>Job Description Matching Signals</h3>
+            </div>
+
+            <!-- Dual Signals Cards -->
+            <div class="signals-grid">
+              <div class="signal-card">
+                <span class="signal-title">Lexical Text Similarity</span>
+                <span class="signal-value" id="text-sim-val">0.00%</span>
+                <p class="signal-desc" id="text-sim-desc">TF-IDF unigram &amp; bigram cosine similarity.</p>
+              </div>
+              <div class="signal-card">
+                <span class="signal-title">Skill Overlap Ratio</span>
+                <span class="signal-value" id="skill-overlap-val">0.0%</span>
+                <p class="signal-desc" id="skill-overlap-desc">Matched skills / Total JD skills.</p>
+              </div>
+            </div>
+
+            <!-- Matched Skills Subcard -->
+            <div class="analysis-subcard">
+              <h4>Matched Skills (<span id="matched-count">0</span>)</h4>
+              <div class="skill-chips" id="matched-skills-chips"></div>
+            </div>
+
+            <!-- Missing Skills (In JD, Not in Resume) Subcard -->
+            <div class="analysis-subcard">
+              <h4>Mentioned in Job Description, Not Detected in Resume (<span id="missing-count">0</span>)</h4>
+              <div class="skill-chips" id="missing-skills-chips"></div>
+            </div>
+
+            <!-- Additional Resume Skills Subcard -->
+            <div class="analysis-subcard">
+              <h4>Additional Resume Skills Not Specified in Job (<span id="additional-count">0</span>)</h4>
+              <div class="skill-chips" id="additional-skills-chips"></div>
+            </div>
+
+            <!-- Lexical Disclaimer -->
+            <div class="baseline-disclaimer">
+              <strong>Academic Baseline Notice:</strong> Keyword absence does not demonstrate lack of competency or experience. These lexical metrics provide an explainable comparison baseline and do not represent hiring probabilities or automated screening outcomes.
+            </div>
+          </div>
+
+          <!-- Structured Analysis Area (populated after Step 2) -->
+          <div class="structured-box hidden" id="structured-box">
+            <!-- Contact Coordinates -->
+            <div class="analysis-subcard">
+              <h3>Contact Details</h3>
+              <div class="contact-grid" id="contact-grid"></div>
+            </div>
+
+            <!-- Detected Sections -->
+            <div class="analysis-subcard">
+              <h3>Resume Sections Detected</h3>
+              <div class="section-pills" id="section-pills"></div>
+            </div>
+
+            <!-- Technical Skills Found -->
+            <div class="analysis-subcard">
+              <h3>Resume Technical Skills (<span id="skill-count">0</span>)</h3>
+              <div class="skills-container" id="skills-container"></div>
+            </div>
+          </div>
+
+          <!-- Diagnostic Warnings Box -->
+          <div class="warnings-box hidden" id="warnings-box" role="alert">
+            <h4>Diagnostic Notices &amp; Warnings:</h4>
+            <ul id="warnings-list"></ul>
+          </div>
+
+          <!-- Extracted Text Inspector -->
+          <div class="extracted-text-wrapper">
+            <div class="text-header">
+              <label for="extracted-text-area">Extracted Text Content (In-Memory Session):</label>
+              <button type="button" class="btn btn-sm" id="copy-btn">Copy Text</button>
+            </div>
+            <textarea id="extracted-text-area" rows="6" readonly aria-label="Extracted Resume Text"></textarea>
+            <p class="privacy-note">
+              <strong>Privacy Guarantee:</strong> Extracted text and job descriptions are stored only in volatile browser memory for this session. They are never written to disk, databases, or cookies.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="project-footer">
+      <p>Student Resume Analyzer &bull; College AI / UML Project &bull; FastAPI + Scikit-Learn TF-IDF In-Memory Pipeline</p>
+    </footer>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# C extensions
+*.pyd
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment variables & secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Testing & Coverage
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+htmlcov/
+
+# Local data & sample uploads (keep .gitkeep)
+data/*
+!data/.gitkeep
+!data/evaluation/
+uploads/
+temp/
+scratch/
+
+# ML / NLP Model weights and large artifacts
+models/
+weights/
+*.bin
+*.pt
+*.pth
+*.safetensors
+*.onnx
+*.pkl
+*.joblib
+*.h5
+
+# Embedding and Hugging Face caches
+.huggingface/
+hf_cache/
+sentence_transformers/
+nltk_data/
+spacy_cache/
+
+# Generated evaluation reports and analysis outputs
+reports/
+eval_results/
+output/
+data/evaluation/*_report.json
+*.log
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
