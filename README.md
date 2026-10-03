@@ -182,6 +182,11 @@ The Student Resume Analyzer is deployed as a single, unified web service on **Re
 * **In-Memory Ephemeral Processing:** Resumes are processed strictly in volatile memory (`io.BytesIO`). No documents, candidate text, or personal coordinates are persisted to disk or databases, making the service fully compatible with Render's ephemeral filesystem.
 * **Free-Tier Limitations:** Hosted on Render's free web service tier. The service automatically spins down after 15 minutes of inactivity (causing a brief cold-start delay on subsequent requests) and shares a monthly allowance of free instance hours.
 * **Service Blueprint:** Declarative configuration is managed via [`render.yaml`](render.yaml) with automatic branch deployment.
+* **Public Service URL:** [https://student-resume-analyzer.onrender.com](https://student-resume-analyzer.onrender.com)
+* **Live Smoke Test Command:**
+  ```powershell
+  python scripts/smoke_test_deployment.py --base-url https://student-resume-analyzer.onrender.com
+  ```
 
 ---
 
