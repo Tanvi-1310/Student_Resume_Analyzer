@@ -248,7 +248,7 @@ def run_smoke_test(base_url: str) -> bool:
         all_passed = False
 
     # 7. Formative Feedback Rubric Test
-    print("\n[7/7] Testing Feedback Rubric (POST /api/v1/resumes/feedback)...")
+    print("\n[7/9] Testing Feedback Rubric (POST /api/v1/resumes/feedback)...")
     try:
         payload = {
             "resume_text": test_resume_text,
@@ -262,6 +262,45 @@ def run_smoke_test(base_url: str) -> bool:
             index_label = data.get("index_label")
             metrics_count = len(data.get("quantified_metrics_detected", []))
             print(f"  PASS: HTTP 200 OK — Total Score: {total_score}/100 ({index_label}), Quantified Metrics: {metrics_count}.")
+        else:
+            print(f"  FAIL: HTTP {resp.status_code}: {resp.text}")
+            all_passed = False
+    except Exception as exc:
+        print(f"  FAIL: Request error: {exc}")
+        all_passed = False
+
+    # 8. ML Evaluation Summary Test
+    print("\n[8/9] Testing ML Evaluation Summary (GET /api/v1/evaluation/summary)...")
+    try:
+        resp = client.get(f"{base}/api/v1/evaluation/summary")
+        if resp.status_code == 200:
+            data = resp.json()
+            dataset_size = data.get("dataset_size")
+            best_model = data.get("comparison_table", {}).get("best_model_name")
+            print(f"  PASS: HTTP 200 OK — Benchmark Pairs: {dataset_size}, Top Model: '{best_model}'.")
+        else:
+            print(f"  FAIL: HTTP {resp.status_code}: {resp.text}")
+            all_passed = False
+    except Exception as exc:
+        print(f"  FAIL: Request error: {exc}")
+        all_passed = False
+
+    # 9. Explainable AI Local Match Explanation Test
+    print("\n[9/9] Testing Explainable AI Local Explainer (POST /api/v1/evaluation/explain)...")
+    try:
+        payload = {
+            "resume_text": test_resume_text,
+            "job_description": test_jd_text,
+            "model_id": "logistic_regression",
+        }
+        resp = client.post(f"{base}/api/v1/evaluation/explain", json=payload)
+        if resp.status_code == 200:
+            data = resp.json()
+            pred_label = data.get("prediction_label")
+            prob = data.get("prediction_probability")
+            pos_count = len(data.get("positive_factors", []))
+            neg_count = len(data.get("negative_factors", []))
+            print(f"  PASS: HTTP 200 OK — Label: '{pred_label}' (p={prob:.3f}), Positive Drivers: {pos_count}, Negative Drivers: {neg_count}.")
         else:
             print(f"  FAIL: HTTP {resp.status_code}: {resp.text}")
             all_passed = False
