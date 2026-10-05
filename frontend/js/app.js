@@ -479,6 +479,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       activeMatchResult = data;
       renderMatchResult(data);
+      fetchMatchXAIExplanation(resumeText, jdText);
     } catch (err) {
       showError(err.message || "An error occurred during job description matching.");
     } finally {
@@ -788,6 +789,15 @@ document.addEventListener("DOMContentLoaded", () => {
     missingCount.textContent = "0";
     additionalCount.textContent = "0";
 
+    // Reset XAI matching card
+    const matchXaiCard = document.getElementById("match-xai-card");
+    if (matchXaiCard) {
+      document.getElementById("match-xai-prob-badge").textContent = "Predicting...";
+      document.getElementById("match-xai-summary").textContent = "Computing local factor contributions...";
+      document.getElementById("match-xai-positive-list").innerHTML = "";
+      document.getElementById("match-xai-negative-list").innerHTML = "";
+    }
+
     // Restore placeholder
     resultsContent.classList.add("hidden");
     resultsPlaceholder.classList.remove("hidden");
@@ -808,6 +818,587 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // =========================================================================
+  // Explainable AI (XAI) Local Match Explainer (Phase Upgrade)
+  // =========================================================================
+
+  async function fetchMatchXAIExplanation(resumeText, jdText) {
+    const badge = document.getElementById("match-xai-prob-badge");
+    const summary = document.getElementById("match-xai-summary");
+    const posList = document.getElementById("match-xai-positive-list");
+    const negList = document.getElementById("match-xai-negative-list");
+
+    if (!badge || !summary || !posList || !negList) return;
+
+    badge.className = "xai-prob-badge";
+    badge.textContent = "Computing XAI...";
+    summary.textContent = "Analyzing decision boundary and feature contributions...";
+    posList.innerHTML = "";
+    negList.innerHTML = "";
+
+    try {
+      const response = await fetch("/api/v1/evaluation/explain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resume_text: resumeText,
+          job_description: jdText,
+          model_id: "logistic_regression",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`XAI service returned HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Render badge
+      const isRel = data.prediction_label.toLowerCase().includes("relevant") && !data.prediction_label.toLowerCase().includes("not");
+      badge.textContent = `${data.prediction_label} (${(data.prediction_probability * 100).toFixed(1)}%)`;
+      badge.className = isRel ? "xai-prob-badge" : "xai-prob-badge xai-prob-not-relevant";
+
+      // Render summary
+      summary.innerHTML = data.plain_language_explanation.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+      // Render positive drivers
+      if (data.positive_factors && data.positive_factors.length > 0) {
+        data.positive_factors.forEach((f) => {
+          const li = document.createElement("li");
+          li.innerHTML = `<strong>${f.factor_name}:</strong> ${f.description}`;
+          posList.appendChild(li);
+        });
+      } else {
+        const li = document.createElement("li");
+        li.textContent = "No prominent positive drivers detected for this pair.";
+        posList.appendChild(li);
+      }
+
+      // Render negative drivers
+      if (data.negative_factors && data.negative_factors.length > 0) {
+        data.negative_factors.forEach((f) => {
+          const li = document.createElement("li");
+          li.innerHTML = `<strong>${f.factor_name}:</strong> ${f.description}`;
+          negList.appendChild(li);
+        });
+      } else {
+        const li = document.createElement("li");
+        li.textContent = "No substantial negative penalty factors detected.";
+        negList.appendChild(li);
+      }
+    } catch (err) {
+      badge.textContent = "XAI Unavailable";
+      summary.textContent = "Could not generate local explanation: " + (err.message || "Unknown error");
+    }
+  }
+
+  // =========================================================================
+  // Navigation Tabs & View Switching
+  // =========================================================================
+
+  const tabAnalyzer = document.getElementById("tab-analyzer");
+  const tabEvaluation = document.getElementById("tab-evaluation");
+  const analyzerView = document.getElementById("analyzer-view");
+  const evaluationView = document.getElementById("evaluation-view");
+
+  let evaluationSummaryLoaded = false;
+  let cachedSummaryData = null;
+
+  if (tabAnalyzer && tabEvaluation && analyzerView && evaluationView) {
+    tabAnalyzer.addEventListener("click", () => {
+      tabAnalyzer.classList.add("active");
+      tabEvaluation.classList.remove("active");
+      analyzerView.classList.remove("hidden");
+      evaluationView.classList.add("hidden");
+    });
+
+    tabEvaluation.addEventListener("click", () => {
+      tabEvaluation.classList.add("active");
+      tabAnalyzer.classList.remove("active");
+      evaluationView.classList.remove("hidden");
+      analyzerView.classList.add("hidden");
+
+      if (!evaluationSummaryLoaded) {
+        loadEvaluationDashboard();
+      }
+    });
+  }
+
+  // =========================================================================
+  // ML Evaluation Dashboard Logic
+  // =========================================================================
+
+  const modelSelect = document.getElementById("model-select");
+
+  async function loadEvaluationDashboard() {
+    try {
+      const response = await fetch("/api/v1/evaluation/summary");
+      if (!response.ok) {
+        throw new Error(`Failed to load evaluation summary (HTTP ${response.status})`);
+      }
+
+      const summary = await response.json();
+      cachedSummaryData = summary;
+      evaluationSummaryLoaded = true;
+
+      // 1. Render comparison table
+      renderComparisonTable(summary.comparison_table);
+
+      // 2. Render workflow stepper
+      renderWorkflowStepper(summary.workflow_steps);
+
+      // 3. Render cross-model comparative visualization
+      renderComparisonBarChart(summary.comparison_table.rows);
+
+      // 4. Render default model
+      renderModelEvaluation(summary.default_model);
+
+      // Initialize interactive XAI tester
+      initXAITester();
+    } catch (err) {
+      console.error("Failed to initialize ML Dashboard:", err);
+      showError("Unable to load ML evaluation benchmark: " + (err.message || "Check network/server status."));
+    }
+  }
+
+  if (modelSelect) {
+    modelSelect.addEventListener("change", async (e) => {
+      const modelId = e.target.value;
+      try {
+        const response = await fetch(`/api/v1/evaluation/models/${encodeURIComponent(modelId)}`);
+        if (!response.ok) {
+          throw new Error(`Model not found or unavailable (HTTP ${response.status})`);
+        }
+        const modelData = await response.json();
+        renderModelEvaluation(modelData);
+      } catch (err) {
+        showError("Failed to load model details: " + err.message);
+      }
+    });
+  }
+
+  function renderModelEvaluation(model) {
+    // A. Metric Cards
+    const accEl = document.getElementById("eval-accuracy-val");
+    const precEl = document.getElementById("eval-precision-val");
+    const recEl = document.getElementById("eval-recall-val");
+    const f1El = document.getElementById("eval-f1-val");
+
+    if (accEl) accEl.textContent = `${(model.metrics.accuracy * 100).toFixed(1)}%`;
+    if (precEl) precEl.textContent = `${(model.metrics.precision * 100).toFixed(1)}%`;
+    if (recEl) recEl.textContent = `${(model.metrics.recall * 100).toFixed(1)}%`;
+    if (f1El) f1El.textContent = `${(model.metrics.f1_score * 100).toFixed(1)}%`;
+
+    // B. Model Overview Details
+    const nameEl = document.getElementById("eval-model-name");
+    const typeEl = document.getElementById("eval-model-type");
+    const purpEl = document.getElementById("eval-model-purpose");
+    const featsEl = document.getElementById("eval-model-features");
+    const methEl = document.getElementById("eval-model-method");
+    const rankEl = document.getElementById("eval-model-ranking");
+    const metaEl = document.getElementById("eval-dataset-meta");
+
+    if (nameEl) nameEl.textContent = model.model_name;
+    if (typeEl) typeEl.textContent = model.model_type;
+    if (purpEl) purpEl.textContent = model.purpose;
+    if (methEl) methEl.textContent = model.evaluation_method;
+
+    if (rankEl) {
+      if (model.ranking_metric_value !== null && model.ranking_metric_value !== undefined) {
+        rankEl.textContent = `${model.ranking_metric_name}: ${(model.ranking_metric_value * 100).toFixed(1)}%`;
+      } else {
+        rankEl.textContent = "N/A (Classification Only)";
+      }
+    }
+
+    if (metaEl) {
+      metaEl.textContent = "25 candidate–job pairs across 5 shared job groups (12 Positive / 13 Negative)";
+    }
+
+    if (featsEl) {
+      featsEl.innerHTML = "";
+      model.input_features.forEach((feat) => {
+        const pill = document.createElement("span");
+        pill.className = "feat-pill";
+        pill.textContent = feat;
+        featsEl.appendChild(pill);
+      });
+    }
+
+    // C. 2x2 Confusion Matrix
+    const cm = model.confusion_matrix;
+    const total = model.metrics.total_samples || 25;
+
+    const tpEl = document.getElementById("cm-tp");
+    const tpPct = document.getElementById("cm-tp-pct");
+    const fnEl = document.getElementById("cm-fn");
+    const fnPct = document.getElementById("cm-fn-pct");
+    const fpEl = document.getElementById("cm-fp");
+    const fpPct = document.getElementById("cm-fp-pct");
+    const tnEl = document.getElementById("cm-tn");
+    const tnPct = document.getElementById("cm-tn-pct");
+    const cmExp = document.getElementById("cm-explanation");
+
+    if (tpEl) tpEl.textContent = cm.true_positives;
+    if (tpPct) tpPct.textContent = `(${((cm.true_positives / total) * 100).toFixed(1)}%)`;
+    if (fnEl) fnEl.textContent = cm.false_negatives;
+    if (fnPct) fnPct.textContent = `(${((cm.false_negatives / total) * 100).toFixed(1)}%)`;
+    if (fpEl) fpEl.textContent = cm.false_positives;
+    if (fpPct) fpPct.textContent = `(${((cm.false_positives / total) * 100).toFixed(1)}%)`;
+    if (tnEl) tnEl.textContent = cm.true_negatives;
+    if (tnPct) tnPct.textContent = `(${((cm.true_negatives / total) * 100).toFixed(1)}%)`;
+    if (cmExp) cmExp.textContent = cm.plain_language_explanation;
+
+    // D. Feature Importance Chart
+    renderFeatureImportanceChart(model.feature_importance, model.model_type);
+  }
+
+  function renderFeatureImportanceChart(features, modelType) {
+    const container = document.getElementById("feature-importance-chart");
+    const badge = document.getElementById("fi-type-badge");
+    if (!container) return;
+
+    container.innerHTML = "";
+    if (badge) {
+      badge.textContent = modelType.includes("Linear") || modelType.includes("Support Vector")
+        ? "Learned Model Coefficients (β)"
+        : "Signal Contribution Weights";
+    }
+
+    if (!features || features.length === 0) {
+      container.innerHTML = "<p class='text-muted'>No feature importance data available for this model.</p>";
+      return;
+    }
+
+    const maxScore = Math.max(...features.map((f) => f.importance_score), 0.001);
+
+    features.forEach((feat) => {
+      const row = document.createElement("div");
+      row.className = "fi-row";
+
+      // Label column
+      const labelWrap = document.createElement("div");
+      labelWrap.className = "fi-label-wrap";
+
+      const name = document.createElement("span");
+      name.className = "fi-name";
+      name.textContent = feat.display_name;
+      name.title = feat.interpretation;
+
+      const dirBadge = document.createElement("span");
+      dirBadge.className = `fi-dir-badge dir-${feat.direction}`;
+      dirBadge.textContent = feat.direction === "positive" ? "+ Pos" : (feat.direction === "negative" ? "- Neg" : "Neutral");
+
+      labelWrap.appendChild(dirBadge);
+      labelWrap.appendChild(name);
+
+      // Track & Fill column
+      const track = document.createElement("div");
+      track.className = "fi-track";
+      track.title = `${feat.display_name}: ${feat.interpretation}`;
+
+      const fill = document.createElement("div");
+      fill.className = `fi-fill fill-${feat.direction}`;
+      const fillPct = Math.min(100, Math.max(5, (feat.importance_score / maxScore) * 100));
+      fill.style.width = `${fillPct}%`;
+
+      track.appendChild(fill);
+
+      // Value column
+      const val = document.createElement("div");
+      val.className = "fi-val";
+      if (feat.raw_coefficient !== null && feat.raw_coefficient !== undefined) {
+        val.textContent = `${feat.raw_coefficient > 0 ? "+" : ""}${feat.raw_coefficient.toFixed(4)}`;
+      } else {
+        val.textContent = feat.importance_score.toFixed(4);
+      }
+
+      row.appendChild(labelWrap);
+      row.appendChild(track);
+      row.appendChild(val);
+      container.appendChild(row);
+    });
+  }
+
+  function renderComparisonTable(tableData) {
+    const tbody = document.getElementById("model-comparison-tbody");
+    const ruleText = document.getElementById("selection-rule-text");
+    if (!tbody) return;
+
+    if (ruleText && tableData.selection_rule) {
+      ruleText.innerHTML = `<strong>Selection Rule:</strong> ${tableData.selection_rule}`;
+    }
+
+    tbody.innerHTML = "";
+    tableData.rows.forEach((row) => {
+      const tr = document.createElement("tr");
+      if (row.is_best) {
+        tr.className = "best-row";
+      }
+
+      const rankStr = row.ranking_metric_value !== null && row.ranking_metric_value !== undefined
+        ? `${(row.ranking_metric_value * 100).toFixed(1)}%`
+        : "N/A";
+
+      tr.innerHTML = `
+        <td>
+          <strong>${row.model_name}</strong>
+          ${row.is_best ? '<span class="best-badge">Best Model</span>' : ''}
+        </td>
+        <td><span class="feat-pill">${row.model_type}</span></td>
+        <td class="metric-num">${(row.accuracy * 100).toFixed(1)}%</td>
+        <td class="metric-num">${(row.precision * 100).toFixed(1)}%</td>
+        <td class="metric-num">${(row.recall * 100).toFixed(1)}%</td>
+        <td class="metric-num">${(row.f1_score * 100).toFixed(1)}%</td>
+        <td class="metric-num">${row.samples || 25}</td>
+        <td class="metric-num">${rankStr}</td>
+        <td><small>${row.evaluation_method}</small></td>
+        <td><small>${row.notes}</small></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderWorkflowStepper(steps) {
+    const container = document.getElementById("workflow-pipeline");
+    if (!container || !steps) return;
+
+    container.innerHTML = "";
+    steps.forEach((s) => {
+      const box = document.createElement("div");
+      box.className = "step-box";
+      box.innerHTML = `
+        <div class="step-num-badge">${s.step_number}</div>
+        <div class="step-title">${s.title}</div>
+        <div class="step-desc">${s.description}</div>
+        <div class="step-comp">${s.component}</div>
+      `;
+      container.appendChild(box);
+    });
+  }
+
+  function renderComparisonBarChart(rows) {
+    const container = document.getElementById("comparison-bar-chart");
+    if (!container || !rows) return;
+
+    container.innerHTML = "";
+    rows.forEach((row) => {
+      const group = document.createElement("div");
+      group.className = "comp-group-row";
+
+      const name = document.createElement("div");
+      name.className = "comp-model-name";
+      name.innerHTML = `${row.model_name}${row.is_best ? ' <span class="best-badge">Best</span>' : ''}`;
+
+      const tracks = document.createElement("div");
+      tracks.className = "multi-bars-track";
+
+      const accWidth = (row.accuracy * 100).toFixed(1);
+      const precWidth = (row.precision * 100).toFixed(1);
+      const recWidth = (row.recall * 100).toFixed(1);
+      const f1Width = (row.f1_score * 100).toFixed(1);
+
+      tracks.innerHTML = `
+        <div class="m-bar bar-acc" style="width: ${accWidth}%" title="Accuracy: ${accWidth}%"></div>
+        <div class="m-bar bar-prec" style="width: ${precWidth}%" title="Precision: ${precWidth}%"></div>
+        <div class="m-bar bar-rec" style="width: ${recWidth}%" title="Recall: ${recWidth}%"></div>
+        <div class="m-bar bar-f1" style="width: ${f1Width}%" title="F1-Score: ${f1Width}%"></div>
+      `;
+
+      group.appendChild(name);
+      group.appendChild(tracks);
+      container.appendChild(group);
+    });
+  }
+
+  // =========================================================================
+  // Interactive Local XAI Explainer Tester
+  // =========================================================================
+
+  function initXAITester() {
+    const btnStrong = document.getElementById("xai-btn-strong");
+    const btnPartial = document.getElementById("xai-btn-partial");
+    const btnNone = document.getElementById("xai-btn-none");
+    const runBtn = document.getElementById("xai-tester-run-btn");
+    const resumeTextarea = document.getElementById("xai-tester-resume");
+    const jdTextarea = document.getElementById("xai-tester-jd");
+    const resultBox = document.getElementById("xai-tester-result");
+    const statusSpan = document.getElementById("xai-tester-status");
+
+    if (!runBtn || !resumeTextarea || !jdTextarea || !resultBox) return;
+
+    const SAMPLE_JD = `Junior Backend Developer
+We are seeking a Junior Backend Developer proficient in Python and FastAPI to build resilient web APIs.
+Requirements:
+• Strong proficiency in Python and modern web frameworks (FastAPI or Django).
+• Hands-on experience with relational databases, specifically PostgreSQL.
+• Practical knowledge of Docker containerization and version control using Git.`;
+
+    const SAMPLE_STRONG = `Alex Morgan
+Email: alex.morgan@example.edu | Phone: +1-555-0101 | GitHub: github.com/alexmorgan
+
+Summary
+Computer Science student with strong backend software development experience in Python and FastAPI.
+
+Experience
+Software Engineering Intern - CloudCraft Systems (Summer 2024)
+• Engineered REST API microservices using Python and FastAPI, handling 1,500 requests per minute.
+• Optimized PostgreSQL queries and database schemas, reducing latency by 28%.
+• Containerized application services using Docker and automated CI/CD workflows with Git.`;
+
+    const SAMPLE_PARTIAL = `Ryan Cooper
+Email: ryan.c@example.edu | Phone: +1-555-0117
+
+Education
+B.S. in Computer Science - State University (Expected May 2025)
+Relevant Coursework: Web Programming, Data Structures, Relational Databases
+
+Academic Projects
+Campus Market Portal
+• Built full-stack web application using React, Python, and SQLite.
+• Implemented user login and item posting features.`;
+
+    const SAMPLE_NONE = `Jordan Hayes
+Email: jordan.h@example.edu | Phone: +1-555-0199
+
+Summary
+Hospitality and guest services associate with 3 years of customer-facing experience in boutique hotel reception and banquet operations.
+
+Experience
+Guest Experience Specialist - Grand Horizon Hotel (2022 - Present)
+• Coordinated guest check-ins, VIP room reservations, and front-desk inquiries.
+• Managed catering inventory and organized private dining receptions.`;
+
+    if (btnStrong) {
+      btnStrong.addEventListener("click", () => {
+        resumeTextarea.value = SAMPLE_STRONG;
+        jdTextarea.value = SAMPLE_JD;
+      });
+    }
+
+    if (btnPartial) {
+      btnPartial.addEventListener("click", () => {
+        resumeTextarea.value = SAMPLE_PARTIAL;
+        jdTextarea.value = SAMPLE_JD;
+      });
+    }
+
+    if (btnNone) {
+      btnNone.addEventListener("click", () => {
+        resumeTextarea.value = SAMPLE_NONE;
+        jdTextarea.value = SAMPLE_JD;
+      });
+    }
+
+    runBtn.addEventListener("click", async () => {
+      const resVal = resumeTextarea.value.trim();
+      const jdVal = jdTextarea.value.trim();
+
+      if (!resVal || !jdVal) {
+        alert("Please provide both a candidate resume and a target job description to run XAI explanation.");
+        return;
+      }
+
+      runBtn.disabled = true;
+      if (statusSpan) statusSpan.textContent = "Computing feature log-odds decomposition...";
+
+      try {
+        const response = await fetch("/api/v1/evaluation/explain", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            resume_text: resVal,
+            job_description: jdVal,
+            model_id: "logistic_regression",
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Explanation failed with HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        // Render Tester Result Box
+        const badge = document.getElementById("xai-res-badge");
+        const prob = document.getElementById("xai-res-prob");
+        const score = document.getElementById("xai-res-score");
+        const modelTag = document.getElementById("xai-res-model");
+        const summary = document.getElementById("xai-res-summary");
+        const posList = document.getElementById("xai-res-pos-list");
+        const negList = document.getElementById("xai-res-neg-list");
+        const fiTbody = document.getElementById("xai-res-fi-tbody");
+
+        const isRel = data.prediction_label.toLowerCase().includes("relevant") && !data.prediction_label.toLowerCase().includes("not");
+
+        if (badge) {
+          badge.textContent = data.prediction_label;
+          badge.className = isRel ? "xai-pred-badge badge-rel" : "xai-pred-badge badge-not-rel";
+        }
+
+        if (prob) prob.textContent = `Estimated Probability: ${(data.prediction_probability * 100).toFixed(1)}%`;
+        if (score) score.textContent = `Decision Log-Odds: ${data.decision_score > 0 ? "+" : ""}${data.decision_score.toFixed(2)}`;
+        if (modelTag) modelTag.textContent = data.model_name;
+        if (summary) summary.innerHTML = data.plain_language_explanation.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+        // Positive drivers
+        if (posList) {
+          posList.innerHTML = "";
+          if (data.positive_factors && data.positive_factors.length > 0) {
+            data.positive_factors.forEach((f) => {
+              const li = document.createElement("li");
+              li.innerHTML = `<strong>${f.factor_name}:</strong> ${f.description}`;
+              posList.appendChild(li);
+            });
+          } else {
+            const li = document.createElement("li");
+            li.textContent = "No prominent positive alignment drivers.";
+            posList.appendChild(li);
+          }
+        }
+
+        // Negative drivers
+        if (negList) {
+          negList.innerHTML = "";
+          if (data.negative_factors && data.negative_factors.length > 0) {
+            data.negative_factors.forEach((f) => {
+              const li = document.createElement("li");
+              li.innerHTML = `<strong>${f.factor_name}:</strong> ${f.description}`;
+              negList.appendChild(li);
+            });
+          } else {
+            const li = document.createElement("li");
+            li.textContent = "No limiting factor penalties detected.";
+            negList.appendChild(li);
+          }
+        }
+
+        // Feature table
+        if (fiTbody) {
+          fiTbody.innerHTML = "";
+          data.feature_contributions.forEach((f) => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td><strong>${f.display_name}</strong></td>
+              <td><span class="fi-dir-badge dir-${f.direction}">${f.direction === "positive" ? "+ Pos" : (f.direction === "negative" ? "- Neg" : "Neutral")}</span></td>
+              <td class="metric-num">${f.raw_coefficient > 0 ? "+" : ""}${f.raw_coefficient.toFixed(4)}</td>
+              <td><small>${f.interpretation}</small></td>
+            `;
+            fiTbody.appendChild(tr);
+          });
+        }
+
+        resultBox.classList.remove("hidden");
+        if (statusSpan) statusSpan.textContent = "Explanation complete.";
+      } catch (err) {
+        if (statusSpan) statusSpan.textContent = "Error: " + err.message;
+      } finally {
+        runBtn.disabled = false;
+      }
+    });
+  }
+
   // Run initial health ping
   checkBackendHealth();
 });
+

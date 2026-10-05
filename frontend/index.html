@@ -34,8 +34,18 @@
       <span class="error-message" id="error-message"></span>
     </div>
 
-    <!-- Main Content Grid -->
-    <main class="main-layout">
+    <!-- Main Navigation Tabs -->
+    <nav class="nav-tabs" aria-label="Application View Navigation">
+      <button type="button" class="nav-tab active" id="tab-analyzer" data-view="analyzer-view">
+        <span class="tab-icon">📄</span> Resume Analyzer &amp; Job Matcher
+      </button>
+      <button type="button" class="nav-tab" id="tab-evaluation" data-view="evaluation-view">
+        <span class="tab-icon">📊</span> Model Evaluation &amp; ML Dashboard
+      </button>
+    </nav>
+
+    <!-- Main Content Grid: Resume Analyzer View -->
+    <main class="main-layout" id="analyzer-view">
       <!-- Input Column -->
       <section class="card input-section" aria-labelledby="input-heading">
         <h2 id="input-heading">Resume &amp; Job Description Input</h2>
@@ -265,10 +275,31 @@
               <div class="skill-chips" id="missing-skills-chips"></div>
             </div>
 
-            <!-- Additional Resume Skills Subcard -->
-            <div class="analysis-subcard">
-              <h4>Additional Resume Skills Not Specified in Job (<span id="additional-count">0</span>)</h4>
-              <div class="skill-chips" id="additional-skills-chips"></div>
+            <!-- Explainable AI (XAI) Local Match Explanation Card -->
+            <div class="xai-explanation-card" id="match-xai-card">
+              <div class="xai-header">
+                <div class="xai-title-wrap">
+                  <span class="xai-badge">Explainable AI (XAI)</span>
+                  <h4>Decision Driver Analysis &amp; Local Explanation</h4>
+                </div>
+                <span class="xai-prob-badge" id="match-xai-prob-badge">Predicting...</span>
+              </div>
+              <p class="xai-summary" id="match-xai-summary">Computing local factor contributions...</p>
+
+              <div class="xai-factors-grid">
+                <div class="xai-factors-column positive-column">
+                  <h5><span class="factor-icon positive-icon">▲</span> Positive Alignment Drivers</h5>
+                  <ul class="factors-list" id="match-xai-positive-list"></ul>
+                </div>
+                <div class="xai-factors-column negative-column">
+                  <h5><span class="factor-icon negative-icon">▼</span> Limiting Factors &amp; Missing Evidence</h5>
+                  <ul class="factors-list" id="match-xai-negative-list"></ul>
+                </div>
+              </div>
+
+              <div class="xai-disclaimer" id="match-xai-disclaimer">
+                <strong>Academic Explainability Notice:</strong> Missing skills indicate absent text keywords in the supplied document, not proof that the candidate lacks competence. This model assesses text alignment and does not predict candidate quality or hiring outcomes.
+              </div>
             </div>
 
             <!-- Lexical Disclaimer -->
@@ -314,6 +345,359 @@
             <p class="privacy-note">
               <strong>Privacy Guarantee:</strong> Extracted text and job descriptions are stored only in volatile browser memory for this session. They are never written to disk, databases, or cookies.
             </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Model Evaluation & ML Dashboard View -->
+    <main class="evaluation-layout hidden" id="evaluation-view" aria-label="Machine Learning Model Evaluation Dashboard">
+      <!-- Dashboard Top Header & Model Selection -->
+      <section class="card eval-header-card">
+        <div class="eval-header-content">
+          <div class="eval-title-group">
+            <span class="eval-badge">Machine Learning Dashboard</span>
+            <h2>Model Evaluation, Feature Importance &amp; Explainable AI (XAI)</h2>
+            <p class="eval-subtitle">
+              Rigorous, reproducible performance benchmarking on the grouped synthetic evaluation dataset 
+              (5 job pools &times; 5 candidate profiles = 25 pairs) using <strong>Stratified 5-Fold Cross-Validation</strong> 
+              with out-of-fold predictions. Zero data leakage between training and evaluation folds.
+            </p>
+          </div>
+          <div class="model-select-wrap">
+            <label for="model-select" class="model-select-label">Select Model to Inspect:</label>
+            <select id="model-select" class="model-select-dropdown" aria-label="Select ML Model for Inspection">
+              <option value="multinomial_nb" selected>Multinomial Naive Bayes (Recommended · Highest F1: 76.2%)</option>
+              <option value="logistic_regression">Logistic Regression (Interpretable Log-Odds Coefficients)</option>
+              <option value="linear_svm">Linear Support Vector Machine (Max-Margin Boundary)</option>
+              <option value="skill_overlap_baseline">Skill Overlap Baseline (Rule-Based Threshold &ge; 0.40)</option>
+              <option value="tfidf_baseline">TF-IDF Cosine Similarity Baseline (Lexical Threshold &ge; 0.15)</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section D: Classification Metric Cards -->
+      <section class="eval-metrics-grid" aria-labelledby="metrics-heading">
+        <h3 id="metrics-heading" class="sr-only">Classification Performance Metrics</h3>
+
+        <div class="metric-card" id="metric-card-accuracy">
+          <div class="metric-card-header">
+            <span class="metric-name">Accuracy</span>
+            <span class="metric-formula">(TP + TN) / Total</span>
+          </div>
+          <div class="metric-card-value" id="eval-accuracy-val">--%</div>
+          <p class="metric-card-desc">Overall proportion of candidate-job pairs classified correctly across all classes.</p>
+        </div>
+
+        <div class="metric-card" id="metric-card-precision">
+          <div class="metric-card-header">
+            <span class="metric-name">Precision</span>
+            <span class="metric-formula">TP / (TP + FP)</span>
+          </div>
+          <div class="metric-card-value" id="eval-precision-val">--%</div>
+          <p class="metric-card-desc">Proportion of predicted relevant pairs that genuinely meet the relevance criteria.</p>
+        </div>
+
+        <div class="metric-card" id="metric-card-recall">
+          <div class="metric-card-header">
+            <span class="metric-name">Recall</span>
+            <span class="metric-formula">TP / (TP + FN)</span>
+          </div>
+          <div class="metric-card-value" id="eval-recall-val">--%</div>
+          <p class="metric-card-desc">Proportion of actual relevant resume profiles successfully identified by the model.</p>
+        </div>
+
+        <div class="metric-card" id="metric-card-f1">
+          <div class="metric-card-header">
+            <span class="metric-name">F1-Score</span>
+            <span class="metric-formula">2 &times; (P &times; R) / (P + R)</span>
+          </div>
+          <div class="metric-card-value" id="eval-f1-val">--%</div>
+          <p class="metric-card-desc">Harmonic mean of precision and recall; primary benchmark selection criterion.</p>
+        </div>
+      </section>
+
+      <!-- Section A & Section C: Model Overview & Confusion Matrix Grid -->
+      <div class="eval-two-column-grid">
+        <!-- Section A: Model Overview -->
+        <section class="card eval-overview-card" aria-labelledby="overview-heading">
+          <div class="card-header-row">
+            <h3 id="overview-heading">A. Model Overview &amp; Scope Specification</h3>
+            <span class="tag tag-model" id="eval-model-type">Model Family</span>
+          </div>
+
+          <div class="overview-details">
+            <div class="detail-row">
+              <span class="detail-label">Model Name:</span>
+              <strong class="detail-value" id="eval-model-name">--</strong>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Core Purpose:</span>
+              <span class="detail-value" id="eval-model-purpose">--</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Input Features:</span>
+              <div class="feature-tags" id="eval-model-features"></div>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Evaluation Protocol:</span>
+              <span class="detail-value" id="eval-model-method">--</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Ranking Performance:</span>
+              <span class="detail-value" id="eval-model-ranking">--</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Benchmark Dataset:</span>
+              <span class="detail-value" id="eval-dataset-meta">--</span>
+            </div>
+          </div>
+
+          <div class="academic-scope-box">
+            <h4>Academic Scope &amp; Non-Hiring Distinction:</h4>
+            <p>
+              This model evaluates <strong>lexical, taxonomic, and structural text alignment</strong> between a student resume 
+              and a target job posting. It is <strong>NOT</strong> an automated ATS screening decision, a hiring probability, 
+              or a candidate qualification rating. Missing skills reflect absent keywords in the submitted text, not proof 
+              of candidate incompetence.
+            </p>
+          </div>
+        </section>
+
+        <!-- Section C: Confusion Matrix -->
+        <section class="card eval-cm-card" aria-labelledby="cm-heading">
+          <div class="card-header-row">
+            <h3 id="cm-heading">C. 2&times;2 Confusion Matrix</h3>
+            <span class="cm-total-badge">Total Evaluated: 25 Pairs</span>
+          </div>
+
+          <p class="cm-subtitle">
+            Out-of-fold predictions on held-out evaluation folds. 
+            Positive class (&ge;2): Relevant match. Negative class (&le;1): Weak or irrelevant match.
+          </p>
+
+          <div class="confusion-matrix-wrapper">
+            <table class="confusion-matrix-table" aria-label="2 by 2 Confusion Matrix">
+              <thead>
+                <tr>
+                  <th scope="col" class="cm-empty-cell"></th>
+                  <th scope="col" class="cm-pred-header">Predicted Relevant<br><span class="cm-sub">(Positive)</span></th>
+                  <th scope="col" class="cm-pred-header">Predicted Not Relevant<br><span class="cm-sub">(Negative)</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row" class="cm-act-header">Actual Relevant<br><span class="cm-sub">(Positive)</span></th>
+                  <td class="cm-cell cm-tp" id="cm-tp-cell">
+                    <span class="cm-cell-label">True Positive (TP)</span>
+                    <span class="cm-cell-count" id="cm-tp">0</span>
+                    <span class="cm-cell-pct" id="cm-tp-pct">(0.0%)</span>
+                  </td>
+                  <td class="cm-cell cm-fn" id="cm-fn-cell">
+                    <span class="cm-cell-label">False Negative (FN)</span>
+                    <span class="cm-cell-count" id="cm-fn">0</span>
+                    <span class="cm-cell-pct" id="cm-fn-pct">(0.0%)</span>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row" class="cm-act-header">Actual Not Relevant<br><span class="cm-sub">(Negative)</span></th>
+                  <td class="cm-cell cm-fp" id="cm-fp-cell">
+                    <span class="cm-cell-label">False Positive (FP)</span>
+                    <span class="cm-cell-count" id="cm-fp">0</span>
+                    <span class="cm-cell-pct" id="cm-fp-pct">(0.0%)</span>
+                  </td>
+                  <td class="cm-cell cm-tn" id="cm-tn-cell">
+                    <span class="cm-cell-label">True Negative (TN)</span>
+                    <span class="cm-cell-count" id="cm-tn">0</span>
+                    <span class="cm-cell-pct" id="cm-tn-pct">(0.0%)</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="cm-legend">
+            <div class="legend-item"><span class="legend-swatch swatch-tp"></span> <strong>TP:</strong> Correctly accepted</div>
+            <div class="legend-item"><span class="legend-swatch swatch-tn"></span> <strong>TN:</strong> Correctly rejected</div>
+            <div class="legend-item"><span class="legend-swatch swatch-fp"></span> <strong>FP:</strong> Incorrectly accepted</div>
+            <div class="legend-item"><span class="legend-swatch swatch-fn"></span> <strong>FN:</strong> Incorrectly rejected</div>
+          </div>
+
+          <p class="cm-explanation-text" id="cm-explanation">Loading confusion matrix analysis...</p>
+        </section>
+      </div>
+
+      <!-- Section B: Feature Importance & Ranking -->
+      <section class="card eval-fi-card" aria-labelledby="fi-heading">
+        <div class="card-header-row">
+          <div>
+            <h3 id="fi-heading">B. Global Feature Importance &amp; Weight Ranking</h3>
+            <p class="section-desc">
+              Ranked influence of input features in the selected model. For linear classifiers, bars reflect 
+              learned model coefficients (<span class="code-span">&beta;</span>) and log-odds impact; 
+              for rule-based baselines, bars show documented heuristic contribution weights.
+            </p>
+          </div>
+          <span class="fi-type-badge" id="fi-type-badge">Global Model Weights</span>
+        </div>
+
+        <div class="fi-chart-container" id="feature-importance-chart" aria-label="Horizontal Feature Importance Chart">
+          <!-- Populated dynamically via JavaScript -->
+        </div>
+
+        <div class="fi-footer-note">
+          <strong>Methodology Guarantee:</strong> Feature weights reflect statistical association and decision boundary contributions 
+          within the benchmark training distribution; they do not imply causal real-world recruitment relationships.
+        </div>
+      </section>
+
+      <!-- Section E: Model Comparison Table -->
+      <section class="card eval-comparison-card" aria-labelledby="comp-heading">
+        <div class="card-header-row">
+          <div>
+            <h3 id="comp-heading">E. Comparative Model Performance Benchmark</h3>
+            <p class="section-desc" id="selection-rule-text">
+              Side-by-side performance across 5 evaluated models. Top model selected by highest Out-of-Fold F1-score with balanced Precision and Recall.
+            </p>
+          </div>
+          <span class="benchmark-tag">5 Job Pools &bull; 25 Pairs</span>
+        </div>
+
+        <div class="table-responsive">
+          <table class="model-comparison-table" aria-label="Model Comparison Table">
+            <thead>
+              <tr>
+                <th scope="col">Model Name</th>
+                <th scope="col">Model Family</th>
+                <th scope="col">Accuracy</th>
+                <th scope="col">Precision</th>
+                <th scope="col">Recall</th>
+                <th scope="col">F1-Score</th>
+                <th scope="col">Samples</th>
+                <th scope="col">Mean NDCG@3</th>
+                <th scope="col">Evaluation Method</th>
+                <th scope="col">Status / Notes</th>
+              </tr>
+            </thead>
+            <tbody id="model-comparison-tbody">
+              <!-- Populated dynamically via JavaScript -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="comp-notice">
+          <strong>Prototype Benchmark Notice:</strong> Results are evaluated against synthetic software candidate profiles. 
+          Performance demonstrates pipeline behavior, algorithmic robustness, and edge-case handling; it does not claim real-world hiring accuracy.
+        </div>
+      </section>
+
+      <!-- Section F: Machine Learning Workflow & Visualizations -->
+      <section class="card eval-workflow-card" aria-labelledby="workflow-heading">
+        <h3 id="workflow-heading">F. End-to-End Machine Learning Pipeline &amp; Metric Comparison</h3>
+        <p class="section-desc">
+          Structured data flow from document ingestion through NLP entity extraction, feature vectorization, 
+          classifier inference, and explainable AI factor decomposition.
+        </p>
+
+        <!-- Pipeline Workflow Stages -->
+        <div class="workflow-stepper" id="workflow-pipeline">
+          <!-- Populated dynamically via JavaScript -->
+        </div>
+
+        <!-- Comparative Multi-Metric Bar Chart -->
+        <div class="comparison-viz-section">
+          <h4>Cross-Model Metric Visualization (Accuracy, Precision, Recall, F1)</h4>
+          <div class="chart-legend-row">
+            <span class="legend-chip chip-acc">Accuracy</span>
+            <span class="legend-chip chip-prec">Precision</span>
+            <span class="legend-chip chip-rec">Recall</span>
+            <span class="legend-chip chip-f1">F1-Score</span>
+          </div>
+          <div class="comparison-bars-container" id="comparison-bar-chart">
+            <!-- Populated dynamically via JavaScript -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Section G: Interactive Local Explainable AI (XAI) Workbench -->
+      <section class="card eval-xai-tester-card" aria-labelledby="xai-tester-heading">
+        <div class="card-header-row">
+          <div>
+            <h3 id="xai-tester-heading">G. Interactive Local Explainable AI (XAI) Workbench</h3>
+            <p class="section-desc">
+              Test candidate resumes and job descriptions interactively to inspect local feature contributions, 
+              decision boundaries, and positive/negative drivers.
+            </p>
+          </div>
+          <div class="xai-presets-group">
+            <span class="preset-label">Load Benchmark Fixtures:</span>
+            <button type="button" class="btn btn-sm btn-outline" id="xai-btn-strong">Alex Morgan (Strong Match)</button>
+            <button type="button" class="btn btn-sm btn-outline" id="xai-btn-partial">Ryan Cooper (Partial Match)</button>
+            <button type="button" class="btn btn-sm btn-outline" id="xai-btn-none">Unrelated Candidate (Non-Match)</button>
+          </div>
+        </div>
+
+        <div class="xai-tester-inputs-grid">
+          <div class="form-group">
+            <label for="xai-tester-resume" class="step-label">Candidate Resume Text:</label>
+            <textarea id="xai-tester-resume" rows="6" placeholder="Paste resume text or click a fixture above..."></textarea>
+          </div>
+          <div class="form-group">
+            <label for="xai-tester-jd" class="step-label">Target Job Description:</label>
+            <textarea id="xai-tester-jd" rows="6" placeholder="Paste job description or click a fixture above..."></textarea>
+          </div>
+        </div>
+
+        <div class="xai-tester-action-row">
+          <button type="button" class="btn btn-primary" id="xai-tester-run-btn">
+            Generate Local XAI Explanation
+          </button>
+          <span class="tester-status" id="xai-tester-status"></span>
+        </div>
+
+        <!-- Dynamic Local XAI Output Panel -->
+        <div class="xai-tester-output hidden" id="xai-tester-result">
+          <div class="xai-result-header">
+            <div class="xai-pred-group">
+              <span class="xai-result-label">Prediction Outcome:</span>
+              <span class="xai-pred-badge" id="xai-res-badge">Relevant Match</span>
+              <span class="xai-prob-text" id="xai-res-prob">Probability: 84.5%</span>
+              <span class="xai-score-text" id="xai-res-score">Logit: +3.21</span>
+            </div>
+            <span class="xai-model-tag" id="xai-res-model">Logistic Regression</span>
+          </div>
+
+          <p class="xai-summary-box" id="xai-res-summary"></p>
+
+          <div class="xai-factors-grid">
+            <div class="xai-factors-column positive-column">
+              <h5><span class="factor-icon positive-icon">▲</span> Positive Alignment Drivers</h5>
+              <ul class="factors-list" id="xai-res-pos-list"></ul>
+            </div>
+            <div class="xai-factors-column negative-column">
+              <h5><span class="factor-icon negative-icon">▼</span> Limiting Factors &amp; Missing Evidence</h5>
+              <ul class="factors-list" id="xai-res-neg-list"></ul>
+            </div>
+          </div>
+
+          <div class="local-fi-table-wrap">
+            <h5>Feature-by-Feature Local Log-Odds Decomposition</h5>
+            <table class="local-fi-table">
+              <thead>
+                <tr>
+                  <th>Signal</th>
+                  <th>Direction</th>
+                  <th>Contribution Weight</th>
+                  <th>Interpretation</th>
+                </tr>
+              </thead>
+              <tbody id="xai-res-fi-tbody"></tbody>
+            </table>
+          </div>
+
+          <div class="xai-disclaimer">
+            <strong>Academic Explainability Notice:</strong> Local explanations decompose the model's decision function into identifiable evidence signals. Missing skills indicate absent text keywords in the supplied document, not proof that the candidate lacks competence. This model assesses text alignment and does not predict candidate quality or hiring outcomes.
           </div>
         </div>
       </section>

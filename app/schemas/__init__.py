@@ -15,6 +15,19 @@ from app.schemas.parser import (
     SkillEvidence,
     StructuredResumeResponse,
 )
+from app.schemas.ml_evaluation import (
+    ClassificationMetrics,
+    ConfusionMatrixData,
+    EvaluationSummaryResponse,
+    FeatureImportanceItem,
+    LocalExplanationRequest,
+    LocalExplanationResponse,
+    LocalFactor,
+    ModelComparisonRow,
+    ModelComparisonTable,
+    ModelEvaluationResult,
+    WorkflowStep,
+)
 from app.schemas.resume import PageExtractionMetadata, ResumeExtractionResponse
 
 __all__ = [
@@ -32,4 +45,16 @@ __all__ = [
     "QuantifiedMetricEvidence",
     "ResumeFeedbackRequest",
     "ResumeFeedbackResponse",
+    "ClassificationMetrics",
+    "ConfusionMatrixData",
+    "FeatureImportanceItem",
+    "ModelEvaluationResult",
+    "ModelComparisonRow",
+    "ModelComparisonTable",
+    "WorkflowStep",
+    "EvaluationSummaryResponse",
+    "LocalFactor",
+    "LocalExplanationRequest",
+    "LocalExplanationResponse",
 ]
+

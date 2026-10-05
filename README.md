@@ -3,7 +3,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
 [![Framework](https://img.shields.io/badge/framework-FastAPI-green.svg)](https://fastapi.tiangolo.com/)
 [![Project Status](https://img.shields.io/badge/status-Release%20Ready%20%7C%20Audited-brightgreen.svg)](#implementation-status)
-[![Tests](https://img.shields.io/badge/tests-141%20passed-success.svg)](#running-tests)
+[![Tests](https://img.shields.io/badge/tests-155%20passed-success.svg)](#running-tests)
 
 An academically defensible, modular system designed for student resume structure evaluation, Applicant Tracking System (ATS) compatibility analysis, explainable job description alignment, and reproducible within-job ranking evaluation.
 
@@ -203,6 +203,9 @@ The application exposes the following canonical, runtime-derived endpoints (insp
 | `POST` | `/api/v1/resumes/extract` | Multipart PDF (`.pdf`) or Word (`.docx`) upload with in-memory text and quality diagnostics. |
 | `POST` | `/api/v1/resumes/feedback` | Explainable 4-dimension heuristic feedback rubric with actionable suggestions. |
 | `POST` | `/api/v1/resumes/match` | Explainable job description matching (TF-IDF similarity + skill overlap). |
+| `GET` | `/api/v1/evaluation/summary` | Complete ML evaluation dashboard summary, confusion matrix, and model comparison. |
+| `GET` | `/api/v1/evaluation/models/{model_id}` | Detailed metrics, 2x2 confusion matrix, and feature importances for a specific model. |
+| `POST` | `/api/v1/evaluation/explain` | Explainable AI (XAI) local prediction explanation and positive/negative driver breakdown. |
 | `GET` | `/health` | Application status, version, and environment. |
 
 
@@ -328,7 +331,47 @@ The system provides formative, rule-based pedagogical feedback evaluated across 
 
 ---
 
-## 9. Running Tests
+## 9. Interactive Machine Learning Evaluation Dashboard & Explainable AI (XAI)
+
+The application features a responsive, browser-accessible Machine Learning Evaluation Dashboard and local Explainable AI (XAI) workbench accessible via the top navigation tab (**Model Evaluation & ML Dashboard**):
+
+### A. Evaluated Machine Learning Models
+Evaluated against the 25 benchmark candidate-job pairs using Stratified 5-Fold Cross-Validation with out-of-fold predictions (zero train/test data leakage):
+
+| Model Name | Model Family | Accuracy | Precision | Recall | F1-Score | Samples | Mean NDCG@3 | Status / Selection |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Multinomial Naive Bayes** | Probabilistic Generative | **80.0%** | **88.9%** | **66.7%** | **76.2%** | 25 | **98.1%** | **Selected Top Model** (Highest F1) |
+| **Skill Overlap Baseline** | Rule-Based Overlap Ranker | 80.0% | 100.0% | 58.3% | 73.7% | 25 | 100.0% | Fixed Threshold ($\ge 0.40$) |
+| **Logistic Regression** | Linear Probabilistic Classifier | 76.0% | 87.5% | 58.3% | 70.0% | 25 | 98.1% | Calibrated Log-Odds |
+| **Linear SVM** | Support Vector Machine | 76.0% | 87.5% | 58.3% | 70.0% | 25 | 98.1% | Maximum-Margin Separator |
+| **TF-IDF Cosine Baseline** | Lexical Similarity Ranker | 60.0% | 100.0% | 16.7% | 28.6% | 25 | 90.4% | Fixed Threshold ($\ge 0.15$) |
+
+* **Selection Criterion:** Highest Out-of-Fold F1-score with balanced Precision and Recall under Stratified 5-Fold Cross-Validation (`multinomial_nb`).
+* **Ranking Separation:** Ranking quality (Mean Grouped NDCG@3) is maintained separately from classification metrics.
+
+### B. Confusion Matrix & Classification Metrics
+Every classifier displays an actual 2×2 confusion matrix verifying $TP + TN + FP + FN = 25$:
+* **Multinomial Naive Bayes (Top Model):** True Positive = 8, True Negative = 12, False Positive = 1, False Negative = 4.
+* **Logistic Regression & Linear SVM:** True Positive = 7, True Negative = 12, False Positive = 1, False Negative = 5.
+* **Skill Overlap Baseline:** True Positive = 7, True Negative = 13, False Positive = 0, False Negative = 5.
+* **TF-IDF Cosine Baseline:** True Positive = 2, True Negative = 13, False Positive = 0, False Negative = 10.
+
+Metric formulas:
+* **Accuracy:** $(TP + TN) / \text{Total}$
+* **Precision:** $TP / (TP + FP)$
+* **Recall:** $TP / (TP + FN)$
+* **F1-Score:** $2 \times (\text{Precision} \times \text{Recall}) / (\text{Precision} + \text{Recall})$
+
+### C. Global Feature Importance & Local Explainable AI (XAI)
+* **Global Weights:** Displays a horizontal bar chart of input features: Matched Skill Count, Canonical Skill Overlap Ratio, Missing Required Skills, Education Section Present, Quantified Impact Metrics, TF-IDF Lexical Similarity, and Experience/Projects Present.
+* **Local Explainability (`POST /api/v1/evaluation/explain`):** Evaluates an individual candidate resume against a job description, computing exact log-odds contributions ($w_i \cdot z_i$) to explain why a match prediction was made:
+  * **Positive Drivers:** Favorable skills, strong coverage, project/metrics evidence.
+  * **Negative Penalties:** Missing required skills, section absence.
+* **Academic Guarantee:** Explanations explicitly clarify that missing skills indicate missing evidence in the supplied text, not proof that a candidate lacks competence. Predictions evaluate text alignment, NOT candidate suitability or automated hiring decisions.
+
+---
+
+## 10. Running Tests
 
 Execute the automated test suite via pytest from the repository root:
 
@@ -336,7 +379,7 @@ Execute the automated test suite via pytest from the repository root:
 pytest -v
 ```
 
-The test suite consists of **141 passing automated tests** across ten modular test suites:
+The test suite consists of **155 passing automated tests** across eleven modular test suites:
 1. `tests/test_health.py` (5 tests): Application initialization, absence of heavy models at startup, health response contract, static landing page.
 2. `tests/test_pdf_extractor.py` (12 tests): In-memory PDF text extraction, empty/oversized upload rejection, non-PDF extension checks, invalid header safety, scanned PDF warnings, multi-page metrics.
 3. `tests/test_docx_extractor.py` (18 tests): Modern `.docx` OpenXML text extraction, paragraph/bullet ordering, table preservation, explicit page break counting, pagination approximation regression test, empty file rejection, invalid signature handling, legacy `.doc` rejection with actionable message, corrupted/malformed file handling, encrypted document rejection, page limit enforcement, low-text quality warnings, and downstream parser/feedback pipeline compatibility.
@@ -347,11 +390,12 @@ The test suite consists of **141 passing automated tests** across ten modular te
 8. `tests/test_resume_feedback.py` (22 tests): Conventional resume scoring, student project equivalence without employment, missing contact deductions, narrative bullets without metrics, exclusion guards (dates, phone numbers, Python 3.11, Java 17, CS 101, 3.8 GPA), empty/minimal resumes, job description dual-mode (JD with skills, JD with no skills, no JD), score determinism, HTTP 400 empty input rejection, HTTP 413/422 oversized input rejection, API response contract, granular contact component breakdowns (email only, email+phone, 1 link partial credit, 2+ links full credit, missing all), name detection heuristics & title guards, skill partition consistency & deduplication, metric deduplication & normalization, and exact threshold boundaries.
 9. `tests/test_architecture_consistency.py` (4 tests): Verification that all documented public endpoint paths correspond to actual registered FastAPI routes via the canonical route inspector, confirmation of core architecture components in source tree, file format support configuration checks, and verification that all 5 UML diagram deliverables exist with valid Mermaid markdown.
 10. `tests/test_route_inspector.py` (25 tests): Canonical route schema (`RouteInventoryItem`), static prohibition of private framework internals, runtime discovery from `app.routes`, OpenAPI fallback for included router wrappers, phantom route rejection, router prefix resolution without string concatenation, framework docs filtering, static mount filtering, root route toggling, duplicate detection (`DuplicateRouteError`), distinct methods on same path, deterministic ordering, unnamed routes, fail-closed validation (`RouteInventoryValidationError` raised when `route.matches()` raises unexpectedly, structured error attributes and cause, no-cause formatting, legitimate policy exclusions never raise, real application completes without validation errors), and **fail-closed OpenAPI capability detection** (absence of callable `openapi` uses direct routes without error, callable `openapi()` raising `AttributeError` fails explicitly without silent fallback, callable `openapi()` raising `RuntimeError` fails explicitly, and partial route inventories are strictly prohibited).
+11. `tests/test_ml_evaluation.py` (14 tests): Classification metrics math, zero-denominator edge cases, benchmark dataset partition & class balance (12 Positive / 13 Negative), Stratified 5-Fold Cross-Validation splits without data leakage, confusion matrix mathematical consistency across all 5 models, descending global feature importance ordering, comparison table schema and winner selection rule, local XAI explanation generation on strong and mismatched candidate profiles, and REST API contracts (`GET /api/v1/evaluation/summary`, `GET /api/v1/evaluation/models/{model_id}`, `POST /api/v1/evaluation/explain`, 404 on unknown models, and 422 validation on empty inputs).
 
 
 ---
 
-## 10. Academic Limitations & Benchmarking Plan
+## 11. Academic Limitations & Benchmarking Plan
 
 For detailed evaluation methodology, mathematical limitations, and the benchmarking protocol against dense Sentence-Transformer models, refer to:
 * [`docs/matching_evaluation_plan.md`](docs/matching_evaluation_plan.md) — Job description matching evaluation and benchmarking plan.

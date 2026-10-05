@@ -30,9 +30,10 @@ app.add_middleware(
 )
 
 # API Routers
-from app.api import resumes_router
+from app.api import evaluation_router, resumes_router
 
 app.include_router(resumes_router, prefix="/api/v1")
+app.include_router(evaluation_router, prefix="/api/v1")
 
 # Core System Endpoints
 @app.get(

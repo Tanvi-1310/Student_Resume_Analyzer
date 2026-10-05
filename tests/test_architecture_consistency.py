@@ -19,6 +19,9 @@ def test_registered_fastapi_endpoints_match_documented_routes():
         ("POST", "/api/v1/resumes/analyze-text"),
         ("POST", "/api/v1/resumes/match"),
         ("POST", "/api/v1/resumes/feedback"),
+        ("GET", "/api/v1/evaluation/summary"),
+        ("GET", "/api/v1/evaluation/models/{model_id}"),
+        ("POST", "/api/v1/evaluation/explain"),
         ("GET", "/"),
     ]
 
@@ -49,6 +52,8 @@ def test_core_architecture_components_exist_in_source_tree():
         base_dir / "app" / "main.py",
         base_dir / "app" / "core" / "config.py",
         base_dir / "app" / "api" / "v1" / "resumes.py",
+        base_dir / "app" / "api" / "v1" / "evaluation.py",
+        base_dir / "app" / "schemas" / "ml_evaluation.py",
         # Document Ingestion Services
         base_dir / "app" / "services" / "pdf_extractor.py",
         base_dir / "app" / "services" / "docx_extractor.py",
@@ -60,6 +65,7 @@ def test_core_architecture_components_exist_in_source_tree():
         # Alignment & Scoring Services
         base_dir / "app" / "services" / "job_matcher.py",
         base_dir / "app" / "services" / "feedback_analyzer.py",
+        base_dir / "app" / "services" / "ml_evaluator.py",
         # Evaluation & Data
         base_dir / "scripts" / "evaluate_matching.py",
         base_dir / "data" / "evaluation" / "synthetic_matching_benchmark.json",

@@ -81,6 +81,9 @@ The following table reflects the **exact, canonical route inventory** derived at
 | `POST` | `/api/v1/resumes/extract` | Validates uploaded resume and extracts text and quality diagnostics in-memory. | `extract_resume_document` ([`app/api/v1/resumes.py`](file:///c:/Users/patil/Student_Resume_Analyzer/app/api/v1/resumes.py)) | `multipart/form-data` (`file: UploadFile`) | `ResumeExtractionResponse` ([`app/schemas/resume.py`](file:///c:/Users/patil/Student_Resume_Analyzer/app/schemas/resume.py)) |
 | `POST` | `/api/v1/resumes/feedback` | Evaluates text across a 4-dimension heuristic rubric and provides formative recommendations. | `generate_resume_feedback` ([`app/api/v1/resumes.py`](file:///c:/Users/patil/Student_Resume_Analyzer/app/api/v1/resumes.py)) | `application/json` (`ResumeFeedbackRequest`) | `ResumeFeedbackResponse` ([`app/schemas/feedback.py`](file:///c:/Users/patil/Student_Resume_Analyzer/app/schemas/feedback.py)) |
 | `POST` | `/api/v1/resumes/match` | Computes TF-IDF cosine similarity and canonical skill overlap against a job description. | `match_resume_with_job` ([`app/api/v1/resumes.py`](file:///c:/Users/patil/Student_Resume_Analyzer/app/api/v1/resumes.py)) | `application/json` (`JobMatchRequest`) | `JobMatchResponse` ([`app/schemas/matcher.py`](file:///c:/Users/patil/Student_Resume_Analyzer/app/schemas/matcher.py)) |
+| `GET` | `/api/v1/evaluation/summary` | Delivers cross-validated evaluation summary, confusion matrices, and model comparison. | `get_evaluation_summary` ([`app/api/v1/evaluation.py`](file:///c:/Users/patil/Student_Resume_Analyzer/app/api/v1/evaluation.py)) | None (HTTP GET) | `EvaluationSummaryResponse` ([`app/schemas/ml_evaluation.py`](file:///c:/Users/patil/Student_Resume_Analyzer/app/schemas/ml_evaluation.py)) |
+| `GET` | `/api/v1/evaluation/models/{model_id}` | Returns model-specific 2x2 confusion matrix, classification metrics, and feature weights. | `get_model_evaluation` ([`app/api/v1/evaluation.py`](file:///c:/Users/patil/Student_Resume_Analyzer/app/api/v1/evaluation.py)) | None (HTTP GET) | `ModelEvaluationResult` ([`app/schemas/ml_evaluation.py`](file:///c:/Users/patil/Student_Resume_Analyzer/app/schemas/ml_evaluation.py)) |
+| `POST` | `/api/v1/evaluation/explain` | Generates local Explainable AI (XAI) feature log-odds decomposition and drivers. | `explain_match_prediction` ([`app/api/v1/evaluation.py`](file:///c:/Users/patil/Student_Resume_Analyzer/app/api/v1/evaluation.py)) | `application/json` (`LocalExplanationRequest`) | `LocalExplanationResponse` ([`app/schemas/ml_evaluation.py`](file:///c:/Users/patil/Student_Resume_Analyzer/app/schemas/ml_evaluation.py)) |
 | `GET` | `/health` | Returns operational health, app name, and version. | `health_check` ([`app/main.py`](file:///c:/Users/patil/Student_Resume_Analyzer/app/main.py)) | None (HTTP GET) | `HealthResponse` ([`app/schemas/health.py`](file:///c:/Users/patil/Student_Resume_Analyzer/app/schemas/health.py)) |
 
 *Static asset mounts: `/css` mounted to `frontend/css/`, `/js` mounted to `frontend/js/`.*
@@ -170,7 +173,36 @@ A reproducible evaluation suite ([`scripts/evaluate_matching.py`](file:///c:/Use
 
 ---
 
-## 9. Privacy, Security, and System Boundaries
+## 9. Machine Learning Evaluation & Explainable AI (XAI) Subsystem
+
+The application integrates an authoritative, reproducible machine learning evaluation and local explainability framework powered by [`MLEvaluatorService`](file:///c:/Users/patil/Student_Resume_Analyzer/app/services/ml_evaluator.py) and exposed via [`app/api/v1/evaluation.py`](file:///c:/Users/patil/Student_Resume_Analyzer/app/api/v1/evaluation.py):
+
+### A. Binary Classification Formulation & Ground-Truth Labels
+The evaluation framework formulates candidate-job alignment as an interpretable binary classification problem evaluated across the 25 benchmark examples in [`data/evaluation/synthetic_matching_benchmark.json`](file:///c:/Users/patil/Student_Resume_Analyzer/data/evaluation/synthetic_matching_benchmark.json):
+* **Positive Class ($y=1$):** Documented human relevance label $\ge 2$ (Moderately Relevant or Highly Relevant), representing strong or partial domain alignment (12 examples).
+* **Negative Class ($y=0$):** Documented human relevance label $\le 1$ (Irrelevant or Weakly Relevant), representing unrelated or minimal alignment (13 examples).
+
+### B. Validation Protocol & Zero Data Leakage
+* **Stratified 5-Fold Cross-Validation:** The 25 examples are partitioned into 5 disjoint test folds (5 examples each) with balanced positive and negative distributions.
+* **Out-of-Fold (OOF) Predictions:** Every metric and confusion matrix count is computed exclusively from held-out fold predictions. Feature scalers and vectorizers are fitted strictly on training folds to prevent data leakage.
+* **Confusion Matrix Integrity:** Every evaluated classifier exposes an actual 2×2 confusion matrix (TP, TN, FP, FN) satisfying $TP + TN + FP + FN = 25$. Metric formulas (Accuracy, Precision, Recall, F1) agree mathematically with confusion matrix cells, with division-by-zero safeguarded to $0.0$.
+
+### C. Side-by-Side Model Comparison
+The framework benchmarks 5 distinct models, maintaining clear separation between classification metrics and ranking metrics (NDCG@3):
+1. **Multinomial Naive Bayes (`MultinomialNB`, alpha=1.0):** Accuracy 80.0%, Precision 88.9%, Recall 66.7%, F1 76.2%, NDCG@3 98.1%. Top-performing model selected under the documented rule (highest out-of-fold F1-score with balanced precision/recall).
+2. **Skill Overlap Baseline (Threshold $\ge 0.40$):** Accuracy 80.0%, Precision 100.0%, Recall 58.3%, F1 73.7%, NDCG@3 100.0%. High precision rule-based keyword ranker.
+3. **Logistic Regression (`LogisticRegression`, C=1.0):** Accuracy 76.0%, Precision 87.5%, Recall 58.3%, F1 70.0%, NDCG@3 98.1%. Probabilistic linear classifier.
+4. **Linear Support Vector Machine (`LinearSVC`, C=1.0):** Accuracy 76.0%, Precision 87.5%, Recall 58.3%, F1 70.0%, NDCG@3 98.1%. Maximum-margin linear boundary separator.
+5. **TF-IDF Cosine Similarity Baseline (Threshold $\ge 0.15$):** Accuracy 60.0%, Precision 100.0%, Recall 16.7%, F1 28.6%, NDCG@3 90.4%. Pure lexical overlap baseline.
+
+### D. Global Feature Importance & Local Explainable AI (XAI)
+* **Global Importance:** Learned linear coefficients ($\beta$) for linear models (Logistic Regression, Linear SVM), empirical log-likelihood differences for Naive Bayes, and documented weights for rule-based heuristics. Sorted descending by impact magnitude.
+* **Local XAI Factor Decomposition (`POST /api/v1/evaluation/explain`):** Decomposes an arbitrary candidate prediction into positive alignment drivers (e.g. matched skills, high TF-IDF similarity, project evidence) and negative penalties (e.g. missing required skills, section absence) based on exact log-odds contributions ($w_i \cdot z_i$).
+* **Academic Explainability Guarantee:** Local explanations explicitly clarify that missing skills indicate missing evidence in the supplied text, not proof that a person lacks that skill, and that the result reflects text alignment rather than candidate quality or hiring suitability.
+
+---
+
+## 10. Privacy, Security, and System Boundaries
 
 * **Zero Disk Persistence:** Volatile in-memory buffers (`io.BytesIO`) ensure candidate privacy. No uploaded documents or extracted text are stored on disk.
 * **No Database or ORM:** The application is fully stateless.
